@@ -1,17 +1,15 @@
 package scheduler.internal
 
-import net.fabricmc.fabric.api.event.world.WorldTickCallback
-import net.minecraft.server.world.ServerWorld
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
 import scheduler.internal.util.*
 
-internal const val ModId = "working-scheduler"
+internal const val ModId = "workingscheduler"
 
 @Suppress("unused")
 internal fun init() = initCommon(ModId) {
-    WorldTickCallback.EVENT.register(WorldTickCallback { if (it is ServerWorld && it.isServer) worldTick(it) })
+    ServerTickEvents.START_WORLD_TICK.register { worldTick(it) }
     registerC2S(TickInServerPacket.serializer())
     registerC2S(CancelTickingInServerPacket.serializer())
-
 }
 
 

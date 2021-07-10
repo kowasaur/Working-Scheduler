@@ -1,7 +1,7 @@
 package scheduler.internal
 
 import net.minecraft.block.Block
-import net.minecraft.nbt.CompoundTag
+import net.minecraft.nbt.NbtCompound
 import net.minecraft.server.world.ServerWorld
 import net.minecraft.util.math.BlockPos
 import net.minecraft.util.registry.Registry
@@ -13,12 +13,13 @@ import scheduler.internal.util.isServer
 import scheduler.internal.util.sendPacketToServer
 import java.util.*
 
+
 internal fun <T> schedule(
     block: T,
     world: World,
     scheduleId: Int,
     blockPos: BlockPos,
-    additionalData: CompoundTag,
+    additionalData: NbtCompound,
     repetition: Repetition
 ): CancellationToken
         where T : Scheduleable, T : Block {

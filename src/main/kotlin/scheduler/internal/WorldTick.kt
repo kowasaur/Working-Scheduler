@@ -6,6 +6,7 @@ import scheduler.internal.util.sendPacket
 // Occurs every tick
 internal fun worldTick(world: ServerWorld) {
     val worldTickers = world.persistentStateManager.getOrCreate(SchedulerId) { TickerState() }
+
     while (worldTickers.hasAnyTickers) {
         val top = worldTickers.closestToEnd
         if (world.time >= top.repetition.nextTickTime) {
