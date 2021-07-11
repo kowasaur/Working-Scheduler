@@ -1,13 +1,10 @@
-@file:UseSerializers(ForIdentifier::class, ForBlockPos::class, ForUuid::class, ForCompoundTag::class)
-
 package scheduler.internal
 
-import drawer.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
-import kotlinx.serialization.UseSerializers
 import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.encodeToJsonElement
 import net.minecraft.nbt.NbtCompound
 import net.minecraft.nbt.NbtList
 import net.minecraft.util.Identifier
@@ -17,7 +14,6 @@ import net.minecraft.world.PersistentState
 import scheduler.Scheduleable
 import java.util.*
 
-@Serializable
 internal data class Schedule(
     val context: ScheduleContext = ScheduleContext(),
     val repetition: Repetition = Repetition.Once(),
@@ -54,7 +50,6 @@ internal sealed class Repetition {
     data class Once(override var nextTickTime: Long = 0) : Repetition()
 }
 
-@Serializable
 internal data class ScheduleContext(
     val blockPos: BlockPos = BlockPos.ORIGIN, val scheduleId: Int = 0,
     val blockId: Identifier = Identifier("minecraft:air"),
@@ -78,8 +73,8 @@ internal fun getScheduleableFromRegistry(scheduleableBlockId: Identifier): Sched
 }
 
 internal class TickerState : PersistentState() {
-    val tickers =
-        PriorityQueue<Schedule>(Comparator { a, b -> (a.repetition.nextTickTime - b.repetition.nextTickTime).toInt() })
+    private val tickers =
+        PriorityQueue<Schedule> { a, b -> (a.repetition.nextTickTime - b.repetition.nextTickTime).toInt() }
 
     fun add(ticker: Schedule) {
         tickers.add(ticker)
@@ -92,66 +87,60 @@ internal class TickerState : PersistentState() {
 
     override fun writeNbt(nbt: NbtCompound?): NbtCompound? = nbt.also {
         val list = NbtList()
-        for (schedule in tickers)
-        {
-            list.add( NbtCompound().also {
-                it.putUuid("cancellationUUID", schedule.cancellationUUID)
-                if (schedule.clientRequestingSchedule != null)
-                    it.putUuid("clientRequestingSchedule", schedule.clientRequestingSchedule)
+        for (schedule in tickers) {
+            list.add(NbtCompound().also {
                 it.putInt("id", schedule.context.scheduleId)
                 it.putString("blockPos", schedule.context.blockPos.toShortString())
                 it.putString("blockId", schedule.context.blockId.toString())
                 it.put("additionalData", schedule.context.additionalData)
                 it.putString("repetition", Json.encodeToJsonElement(schedule.repetition).toString())
+                if (schedule.clientRequestingSchedule != null)
+                    it.putUuid("clientRequestingSchedule", schedule.clientRequestingSchedule)
+                it.putUuid("cancellationUUID", schedule.cancellationUUID)
             })
         }
         nbt?.put("savedTickers", list)
-        //val json = Json.encodeToJsonElement(tickers.toList())
-        //it?.putString("json", json.toString())
-//        tickers.forEach {
-//            if (nbt != null) {
-//                Schedule.serializer().put(it, nbt, it.cancellationUUID.toString())
-//            }
-//        }
     }
 }
 
+/**
+ * Factory function used in `PersistentState.getOrCreate`. Will create a TickerState and populate values from its saved NbtCompound.
+ */
 internal fun loadTickerStateFromNbt(rootTag: NbtCompound): TickerState = TickerState().also { state ->
-    val savedTickers : NbtList = rootTag.get("savedTickers") as NbtList
-    for (tag in savedTickers)
-    {
-        if (tag is NbtCompound)
-        {
-            val schedule = Schedule(ScheduleContext(
-                blockPos = stringToBlockPos(tag.getString("blockPos")),
-                scheduleId = tag.getInt("id"),
-                blockId = Identifier(tag.getString("blockId")),
-                additionalData = tag.getCompound("additionalData")),
+    val savedTickers: NbtList = rootTag.get("savedTickers") as NbtList
+    for (tag in savedTickers) {
+        if (tag is NbtCompound) {
+            val schedule = Schedule(
+                ScheduleContext(
+                    blockPos = stringToBlockPos(tag.getString("blockPos")),
+                    scheduleId = tag.getInt("id"),
+                    blockId = Identifier(tag.getString("blockId")),
+                    additionalData = tag.getCompound("additionalData")
+                ),
                 repetition = Json.decodeFromString(tag.getString("repetition")),
-                clientRequestingSchedule = getNullUUID(tag, "clientRequestingSchedule"),
-                cancellationUUID = tag.getUuid("cancellationUUID"))
+                clientRequestingSchedule = getNullableUUID(tag, "clientRequestingSchedule"),
+                cancellationUUID = tag.getUuid("cancellationUUID")
+            )
             val registryScheduleable = getScheduleableFromRegistry(schedule.context.blockId) ?: continue
             state.add(schedule.apply { scheduleable = registryScheduleable })
         }
     }
-//    for (key in tag.keys) {
-//        val loadedSchedule = Schedule.serializer().getFrom(tag, key)
-//        val registryScheduleable = getScheduleableFromRegistry(loadedSchedule.context.blockId)
-//            ?: continue
-//        it.tickers.add(loadedSchedule.apply { scheduleable = registryScheduleable })
-//    }
 }
 
-internal fun stringToBlockPos(string: String) : BlockPos
-{
+/**
+ * String from `BlockPos.toShortString()` -> BlockPos
+ */
+internal fun stringToBlockPos(string: String): BlockPos {
     if (string.isEmpty())
         return BlockPos.ORIGIN
     val split = string.replace(" ", "").split(",")
     return BlockPos(Integer.parseInt(split[0]), Integer.parseInt(split[1]), Integer.parseInt(split[2]))
 }
 
-internal fun getNullUUID(tag: NbtCompound, key : String) : UUID?
-{
+/**
+ * Returns a UUID from tag or returns null
+ */
+internal fun getNullableUUID(tag: NbtCompound, key: String): UUID? {
     if (tag.contains(key))
         return tag.getUuid(key)
     return null
