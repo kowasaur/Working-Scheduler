@@ -2,9 +2,6 @@ package scheduler.internal
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.encodeToJsonElement
 import net.minecraft.nbt.NbtCompound
 import net.minecraft.nbt.NbtList
 import net.minecraft.util.Identifier
@@ -12,6 +9,8 @@ import net.minecraft.util.math.BlockPos
 import net.minecraft.util.registry.Registry
 import net.minecraft.world.PersistentState
 import scheduler.Scheduleable
+import scheduler.internal.util.nbtToSchedule
+import scheduler.internal.util.scheduleToNbt
 import java.util.*
 
 internal data class Schedule(
@@ -85,21 +84,12 @@ internal class TickerState : PersistentState() {
     fun removeClosestToEnd(): Schedule? = tickers.poll()
     fun cancel(cancellationUUID: UUID): Boolean = tickers.removeIf { it.cancellationUUID == cancellationUUID }
 
-    override fun writeNbt(nbt: NbtCompound?): NbtCompound? = nbt.also {
+    override fun writeNbt(rootTag: NbtCompound?): NbtCompound? = rootTag?.also {
         val list = NbtList()
         for (schedule in tickers) {
-            list.add(NbtCompound().also {
-                it.putInt("id", schedule.context.scheduleId)
-                it.putString("blockPos", schedule.context.blockPos.toShortString())
-                it.putString("blockId", schedule.context.blockId.toString())
-                it.put("additionalData", schedule.context.additionalData)
-                it.putString("repetition", Json.encodeToJsonElement(schedule.repetition).toString())
-                if (schedule.clientRequestingSchedule != null)
-                    it.putUuid("clientRequestingSchedule", schedule.clientRequestingSchedule)
-                it.putUuid("cancellationUUID", schedule.cancellationUUID)
-            })
+            list.add(NbtCompound().also { newTag -> scheduleToNbt(newTag, schedule) })
         }
-        nbt?.put("savedTickers", list)
+        rootTag.put("savedTickers", list)
     }
 }
 
@@ -110,22 +100,13 @@ internal fun loadTickerStateFromNbt(rootTag: NbtCompound): TickerState = TickerS
     val savedTickers: NbtList = rootTag.get("savedTickers") as NbtList
     for (tag in savedTickers) {
         if (tag is NbtCompound) {
-            val schedule = Schedule(
-                ScheduleContext(
-                    blockPos = stringToBlockPos(tag.getString("blockPos")),
-                    scheduleId = tag.getInt("id"),
-                    blockId = Identifier(tag.getString("blockId")),
-                    additionalData = tag.getCompound("additionalData")
-                ),
-                repetition = Json.decodeFromString(tag.getString("repetition")),
-                clientRequestingSchedule = getNullableUUID(tag, "clientRequestingSchedule"),
-                cancellationUUID = tag.getUuid("cancellationUUID")
-            )
+            val schedule = nbtToSchedule(tag)
             val registryScheduleable = getScheduleableFromRegistry(schedule.context.blockId) ?: continue
             state.add(schedule.apply { scheduleable = registryScheduleable })
         }
     }
 }
+
 
 /**
  * String from `BlockPos.toShortString()` -> BlockPos
