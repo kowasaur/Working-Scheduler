@@ -8,13 +8,13 @@ internal const val ModId = "workingscheduler"
 @Suppress("unused")
 internal fun init() = initCommon(ModId) {
     ServerTickEvents.START_WORLD_TICK.register { worldTick(it) }
-    registerC2S(TickInServerPacket.serializer())
-    registerC2S(CancelTickingInServerPacket.serializer())
+    registerC2S(PACKET_ID_TICK_IN_SERVER, TickInServerPacket::factory)
+    registerC2S(PACKET_ID_CANCEL_TICKING_IN_SERVER, CancelTickingInServerPacket::factory)
 }
 
 
 @Suppress("unused")
 internal fun initClient() = initClientOnly(ModId) {
-    registerS2C(FinishScheduleInClientPacket.serializer())
+    registerS2C(PACKET_ID_FINISH_SCHEDULE_IN_CLIENT, FinishScheduleInClientPacket::factory)
 }
 
