@@ -24,6 +24,7 @@ minecraft {
 repositories {
     mavenCentral()
     mavenLocal()
+    jcenter()
 }
 
 
